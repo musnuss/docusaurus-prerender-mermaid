@@ -63,12 +63,16 @@ async function renderAllMermaidDiagrams(options) {
 
   const themeNameConfig = `-t ${themeName}`;
 
-  const globPatterns = contentPaths.flatMap((p) => [
-    path.join(p, '**/*.md'),
-    path.join(p, '**/*.mdx'),
-    path.join('i18n', '**', p, '**/*.md'),
-    path.join('i18n', '**', p, '**/*.mdx'),
-  ]);
+  const globPatterns = [
+    // original sources
+    ...contentPaths.flatMap((p) => [
+      path.join(p, '**/*.md'),
+      path.join(p, '**/*.mdx'),
+    ]),
+    // localized plugin content
+    path.join('i18n', '*', 'docusaurus-plugin-content-*', '**/*.md'),
+    path.join('i18n', '*', 'docusaurus-plugin-content-*', '**/*.mdx'),
+  ];
 
   log(`Globbing patterns: \n- ${globPatterns.join('\n- ')}`);
 
