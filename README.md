@@ -1,6 +1,8 @@
-# `docusaurus-prerender-mermaid`
+# Docusaurus Prerender Mermaid Plugin
 
-[](https://www.npmjs.com/package/docusaurus-prerender-mermaid)
+[Npm](https://www.npmjs.com/package/@barrierenlos/docusaurus-prerender-mermaid)
+[GitHub](https://github.com/musnuss/docusaurus-prerender-mermaid)
+[Documentation](https://barrierenlos.com/en/accessibility-hub/resources/docusaurus/docusaurus-prerender-mermaid)
 
 A Docusaurus plugin that pre-renders your Mermaid diagrams into static SVG or PNG images at build time.
 
@@ -62,10 +64,7 @@ You need to install the plugin from the npm registry:
 
 ```bash
 # With npm
-npm install docusaurus-plugin-mermaid-static
-
-# With yarn
-yarn add docusaurus-plugin-mermaid-static
+npm install @barrierenlos/docusaurus-prerender-mermaid
 ```
 
 ## Setup
@@ -79,7 +78,7 @@ You must add the plugin to **two** places in your `docusaurus.config.ts`:
 // docusaurus.config.ts
 import type { Config } from '@docusaurus/types';
 // 1. Import the remark plugin
-import remarkMermaidStatic from 'docusaurus-plugin-mermaid-static/remark';
+import remarkMermaidStatic from '@barrierenlos/docusaurus-prerender-mermaid/remark';
 
 const config: Config = {
   // ...
@@ -102,7 +101,7 @@ const config: Config = {
   // 2. Add the main plugin
   plugins: [
     [
-      'docusaurus-plugin-mermaid-static',
+      '@barrierenlos/docusaurus-prerender-mermaid',
       {
         // Plugin options...
         contentPaths: ['docs', 'legal'], // Dirs to scan
@@ -161,12 +160,12 @@ If you are happy with all the defaults, you just need to register the plugin. Th
 
 ```typescript
 // docusaurus.config.ts
-import remarkMermaidStatic from 'docusaurus-plugin-mermaid-static/remark';
+import remarkMermaidStatic from 'docusaurus-prerender-mermaid/remark';
 
 const config: Config = {
   // ...
   plugins: [
-    'docusaurus-plugin-mermaid-static',
+    'docusaurus-prerender-mermaid',
     // ...
     [
       '@docusaurus/plugin-content-docs',
@@ -200,13 +199,13 @@ This example changes the content directories, output path, and adds a custom sca
 
 ```typescript
 // docusaurus.config.ts
-import remarkMermaidStatic from 'docusaurus-plugin-mermaid-static/remark';
+import remarkMermaidStatic from 'docusaurus-prerender-mermaid/remark';
 
 const config: Config = {
   // ...
   plugins: [
     [
-      'docusaurus-plugin-mermaid-static',
+      'docusaurus-prerender-mermaid',
       {
         contentPaths: ['docs', 'legal', 'src/pages'],
         outputDir: 'static/assets/mermaid',

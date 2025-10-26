@@ -1,5 +1,5 @@
 {
-  "name": "docusaurus-prerender-mermaid",
+  "name": "@barrierenlos/docusaurus-prerender-mermaid",
   "version": "1.0.0",
   "description": "A Docusaurus plugin to pre-render Mermaid diagrams into static images (SVG or PNG) at build time, with support for light/dark themes.",
   "main": "index.js",
