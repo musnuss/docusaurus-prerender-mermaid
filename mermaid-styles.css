@@ -1,0 +1,16 @@
+[data-theme='light'] .static-mermaid-figure .mermaid-light {
+  display: flex;
+}
+
+[data-theme='light'] .static-mermaid-figure .mermaid-dark {
+  display: none;
+}
+
+/* When the data-theme is 'dark', hide the light and show the dark */
+[data-theme='dark'] .static-mermaid-figure .mermaid-light {
+  display: none;
+}
+
+[data-theme='dark'] .static-mermaid-figure .mermaid-dark {
+  display: flex;
+}

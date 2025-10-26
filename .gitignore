@@ -1,0 +1,11 @@
+# Node.js
+/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+/dist
+
+# OS files
+.DS_Store
