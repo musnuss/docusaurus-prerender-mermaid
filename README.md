@@ -1,8 +1,10 @@
 # Docusaurus Prerender Mermaid Plugin
 
 [Npm](https://www.npmjs.com/package/@barrierenlos/docusaurus-prerender-mermaid)
+
 [GitHub](https://github.com/musnuss/docusaurus-prerender-mermaid)
-[Documentation](https://barrierenlos.com/en/accessibility-hub/resources/docusaurus/docusaurus-prerender-mermaid)
+
+[Live-Demo](https://barrierenlos.com/en/accessibility-hub/resources/docusaurus/docusaurus-prerender-mermaid)
 
 A Docusaurus plugin that pre-renders your Mermaid diagrams into static SVG or PNG images at build time.
 
