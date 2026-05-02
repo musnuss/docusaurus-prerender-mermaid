@@ -1,6 +1,6 @@
 // remark.js
 const { visit } = require('unist-util-visit');
-const crypto = require('crypto');
+const { createHash, getDiagramFilename } = require('./diagram-utils');
 const { globalStore } = require('./store');
 
 const metadataBlockRegex = /---([\s\S]*?)---/;
@@ -11,28 +11,41 @@ const widthRegex = /width:\s*(.*)/;
 const prerenderRegex = /prerender:\s*false/;
 const descriptionIdRegex = /descriptionId:\s*(.*)/;
 
-function createHash(str) {
-  return crypto.createHash('md5').update(str).digest('hex').substring(0, 10);
-}
-
 module.exports = () => {
   // ### 1. Get New Options from Store ###
   const {
+    siteDir,
     publicDir,
     defaultLocale,
     outputFormat,
     outputSuffixes,
     renderDualThemes,
     defaultThemeSuffix,
+    useRenderedDiagrams,
+    renderVersionSalt,
   } = globalStore.get();
+
+  function createVersionedSrc(filename, versionKey) {
+    const baseSrc = `${publicDir.replace(/\/$/, '')}/${filename}`;
+
+    if (!versionKey) {
+      return baseSrc;
+    }
+
+    return `${baseSrc}?v=${versionKey}`;
+  }
 
   return (tree, file) => {
     const tasks = [];
+    let mermaidBlockIndex = 0;
 
     visit(tree, 'code', (node, index, parent) => {
       if (node.lang !== 'mermaid') {
         return;
       }
+
+      const currentDiagramIndex = mermaidBlockIndex;
+      mermaidBlockIndex += 1;
 
       // ### 2. Parse Metadata ###
       const value = node.value;
@@ -45,6 +58,7 @@ module.exports = () => {
       }
 
       const idMatch = metadataContent.match(idRegex);
+  const hasExplicitId = Boolean(idMatch && idMatch[1]);
       const altMatch = metadataContent.match(altRegex);
       const captionMatch = metadataContent.match(captionRegex);
       const descriptionIdMatch = metadataContent.match(descriptionIdRegex);
@@ -90,20 +104,43 @@ module.exports = () => {
       // ### 3. Create Figure/Image Nodes ###
       let childrenNodes = [];
 
-      if (process.env.NODE_ENV === 'production') {
+      if (useRenderedDiagrams) {
         const filePath = file.path;
         const localeMatch = filePath.match(/i18n\/([^\/]+)\//);
         const locale = localeMatch ? localeMatch[1] : defaultLocale;
+        const versionBase = JSON.stringify({
+          mermaidCode,
+          renderVersionSalt,
+        });
 
         // ### CHECK WHICH MODE TO RENDER ###
         if (renderDualThemes) {
           // ### Render BOTH Light and Dark Images ###
-          const filenameLight = `${id}-${locale}${outputSuffixes.light}.${outputFormat}`;
-          const srcLight = `${publicDir.replace(/\/$/, '')}/${filenameLight}`;
+          const filenameLight = getDiagramFilename({
+            id,
+            mermaidCode,
+            hasExplicitId,
+            siteDir,
+            filePath,
+            diagramIndex: currentDiagramIndex,
+            locale,
+            outputSuffix: outputSuffixes.light,
+            outputFormat,
+          });
+          const lightVersionKey = createHash(`${versionBase}:${filenameLight}`);
+          const srcLight = createVersionedSrc(
+            filenameLight,
+            lightVersionKey
+          );
           const lightImgNode = {
             type: 'mdxJsxFlowElement',
             name: 'img',
             attributes: [
+              {
+                type: 'mdxJsxAttribute',
+                name: 'key',
+                value: `mermaid-light-${lightVersionKey}`,
+              },
               {
                 type: 'mdxJsxAttribute',
                 name: 'width',
@@ -120,12 +157,31 @@ module.exports = () => {
             children: [],
           };
 
-          const filenameDark = `${id}-${locale}${outputSuffixes.dark}.${outputFormat}`;
-          const srcDark = `${publicDir.replace(/\/$/, '')}/${filenameDark}`;
+          const filenameDark = getDiagramFilename({
+            id,
+            mermaidCode,
+            hasExplicitId,
+            siteDir,
+            filePath,
+            diagramIndex: currentDiagramIndex,
+            locale,
+            outputSuffix: outputSuffixes.dark,
+            outputFormat,
+          });
+          const darkVersionKey = createHash(`${versionBase}:${filenameDark}`);
+          const srcDark = createVersionedSrc(
+            filenameDark,
+            darkVersionKey
+          );
           const darkImgNode = {
             type: 'mdxJsxFlowElement',
             name: 'img',
             attributes: [
+              {
+                type: 'mdxJsxAttribute',
+                name: 'key',
+                value: `mermaid-dark-${darkVersionKey}`,
+              },
               {
                 type: 'mdxJsxAttribute',
                 name: 'width',
@@ -144,13 +200,32 @@ module.exports = () => {
           childrenNodes = [lightImgNode, darkImgNode];
         } else {
           // ### Render ONLY the Default Image ###
-          const filename = `${id}-${locale}${defaultThemeSuffix}.${outputFormat}`;
-          const src = `${publicDir.replace(/\/$/, '')}/${filename}`;
+          const filename = getDiagramFilename({
+            id,
+            mermaidCode,
+            hasExplicitId,
+            siteDir,
+            filePath,
+            diagramIndex: currentDiagramIndex,
+            locale,
+            outputSuffix: defaultThemeSuffix,
+            outputFormat,
+          });
+          const versionKey = createHash(`${versionBase}:${filename}`);
+          const src = createVersionedSrc(
+            filename,
+            versionKey
+          );
 
           const defaultImgNode = {
             type: 'mdxJsxFlowElement',
             name: 'img',
             attributes: [
+              {
+                type: 'mdxJsxAttribute',
+                name: 'key',
+                value: `mermaid-${versionKey}`,
+              },
               {
                 type: 'mdxJsxAttribute',
                 name: 'width',
@@ -165,7 +240,6 @@ module.exports = () => {
           childrenNodes = [defaultImgNode];
         }
       } else {
-        // Dev mode: just show the live-rendered code block
         childrenNodes = [
           {
             type: 'code',

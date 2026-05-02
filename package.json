@@ -1,6 +1,6 @@
 {
   "name": "@barrierenlos/docusaurus-prerender-mermaid",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A Docusaurus plugin to pre-render Mermaid diagrams into static images (SVG or PNG) at build time, with support for light/dark themes.",
   "main": "index.js",
   "exports": {
@@ -8,12 +8,14 @@
     "./remark": "./remark.js"
   },
   "scripts": {
-    "build": "echo \"No build script needed\" && exit 0"
+    "build": "echo \"No build script needed\" && exit 0",
+    "test": "node --test"
   },
   "dependencies": {
     "globby": "^13.2.2",
     "p-limit": "^4.0.0",
-    "@mermaid-js/mermaid-cli": "^10.9.0"
+    "@mermaid-js/mermaid-cli": "^10.9.0",
+    "unist-util-visit": "^5.0.0"
   },
   "peerDependencies": {
     "@docusaurus/core": "^3.0.0"

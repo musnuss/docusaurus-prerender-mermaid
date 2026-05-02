@@ -5,6 +5,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const util = require('util');
 const crypto = require('crypto');
+const { createHash, getDiagramFilename } = require('./diagram-utils');
 let pLimit;
 
 const execAsync = util.promisify(exec);
@@ -13,9 +14,54 @@ const metadataBlockRegex = /---([\s\S]*?)---/;
 const idRegex = /id:\s*(.*)/;
 const prerenderRegex = /prerender:\s*false/;
 const draftRegex = /draft:\s*true/;
+const cacheVersion = 1;
 
-function createHash(str) {
-  return crypto.createHash('md5').update(str).digest('hex').substring(0, 10);
+function createRenderSignature(payload) {
+  return crypto.createHash('sha256').update(payload).digest('hex');
+}
+
+async function readCacheIndex(cacheFilePath) {
+  if (!cacheFilePath) {
+    return {};
+  }
+
+  try {
+    const raw = await fs.readFile(cacheFilePath, 'utf8');
+    const parsed = JSON.parse(raw);
+
+    if (parsed.version !== cacheVersion || typeof parsed.tasks !== 'object') {
+      return {};
+    }
+
+    return parsed.tasks;
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      error(`Failed to read cache file: ${cacheFilePath}`, err);
+    }
+
+    return {};
+  }
+}
+
+async function writeCacheIndex(cacheFilePath, cacheIndex) {
+  if (!cacheFilePath) {
+    return;
+  }
+
+  await fs.mkdir(path.dirname(cacheFilePath), { recursive: true });
+  await fs.writeFile(
+    cacheFilePath,
+    JSON.stringify({ version: cacheVersion, tasks: cacheIndex }, null, 2)
+  );
+}
+
+async function pathExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
 
 // --- Logging helpers ---
@@ -37,6 +83,8 @@ async function renderAllMermaidDiagrams(options) {
     contentPaths,
     outputDir,
     themeConfigPath,
+    themeConfigHash,
+    cacheFilePath,
     defaultLocale,
     outputFormat,
     concurrency,
@@ -44,6 +92,7 @@ async function renderAllMermaidDiagrams(options) {
     tempDir,
     themeName,
     outputSuffix,
+    renderDiagram,
   } = options;
 
   log(`Build process starting for theme: ${themeName} ('${outputSuffix}')`);
@@ -55,6 +104,8 @@ async function renderAllMermaidDiagrams(options) {
   log(`Starting build with concurrency: ${concurrency}`);
 
   await fs.mkdir(outputDir, { recursive: true });
+  const cacheIndex = await readCacheIndex(cacheFilePath);
+  let cacheIndexChanged = false;
 
   const themeConfigFile = themeConfigPath ? `-c "${themeConfigPath}"` : '';
   if (themeConfigPath) {
@@ -65,9 +116,9 @@ async function renderAllMermaidDiagrams(options) {
 
   const globPatterns = [
     // original sources
-    ...contentPaths.flatMap((p) => [
-      path.join(p, '**/*.md'),
-      path.join(p, '**/*.mdx'),
+    ...contentPaths.flatMap((contentPath) => [
+      path.join(contentPath, '**/*.md'),
+      path.join(contentPath, '**/*.mdx'),
     ]),
     // localized plugin content
     path.join('i18n', '*', 'docusaurus-plugin-content-*', '**/*.md'),
@@ -98,7 +149,7 @@ async function renderAllMermaidDiagrams(options) {
       log(`Found ${mermaidBlocks.length} mermaid blocks in: ${relativePath}`);
     }
 
-    for (const block of mermaidBlocks) {
+    for (const [mermaidBlockIndex, block] of mermaidBlocks.entries()) {
       const metadataBlockMatch = block.match(metadataBlockRegex);
       const metadataContent = metadataBlockMatch ? metadataBlockMatch[1] : '';
 
@@ -108,6 +159,7 @@ async function renderAllMermaidDiagrams(options) {
       }
 
       const idMatch = metadataContent.match(idRegex);
+      const hasExplicitId = Boolean(idMatch && idMatch[1]);
       const mermaidCode = block
         .replace(/```mermaid|```/g, '')
         .replace(metadataBlockRegex, '')
@@ -120,8 +172,29 @@ async function renderAllMermaidDiagrams(options) {
         id = createHash(mermaidCode);
       }
 
-      const filename = `${id}-${locale}${outputSuffix}.${outputFormat}`;
+      const filename = getDiagramFilename({
+        id,
+        mermaidCode,
+        hasExplicitId,
+        siteDir,
+        filePath: file,
+        diagramIndex: mermaidBlockIndex,
+        locale,
+        outputSuffix,
+        outputFormat,
+      });
       const outputPath = path.join(outputDir, filename);
+      const renderSignature = createRenderSignature(
+        JSON.stringify({
+          filename,
+          mermaidCode,
+          outputFormat,
+          outputSuffix,
+          themeName,
+          themeConfigHash: themeConfigHash || 'default',
+          mmdcArgs,
+        })
+      );
 
       log(
         `... Queuing task for ID ${id} (locale: ${locale}, theme: ${themeName})`
@@ -133,6 +206,7 @@ async function renderAllMermaidDiagrams(options) {
         filename,
         mermaidCode,
         outputPath,
+        renderSignature,
       });
     }
   }
@@ -141,7 +215,7 @@ async function renderAllMermaidDiagrams(options) {
     `Found ${diagramTasks.length} total diagram tasks for theme '${themeName}'.`
   );
   const uniqueTasks = Array.from(
-    new Map(diagramTasks.map((t) => [t.filename, t])).values()
+    new Map(diagramTasks.map((task) => [task.filename, task])).values()
   );
   log(
     `Found ${uniqueTasks.length} unique diagrams to render for theme '${themeName}'.`
@@ -155,35 +229,67 @@ async function renderAllMermaidDiagrams(options) {
     renderPromises.push(
       limit(async () => {
         const tempInputFile = path.join(tempDir, `temp_${task.filename}.mmd`);
-        try {
-          await fs.access(task.outputPath);
-          success(`Skipping cached: ${task.filename}`);
-          skippedCount++;
-          return;
-        } catch (e) {
-          log(`Temp file not found, creating: ${tempInputFile}`);
-        }
-
-        await fs.writeFile(tempInputFile, task.mermaidCode);
+        const hasCachedOutput = await pathExists(task.outputPath);
+        let wroteTempInput = false;
 
         try {
-          log(`Rendering new: ${task.filename}`);
-          await execAsync(
-            `npx mmdc -i "${tempInputFile}" -o "${task.outputPath}" ${themeConfigFile} ${themeNameConfig} ${mmdcArgs.join(
-              ' '
-            )}`
-          );
+          if (
+            hasCachedOutput &&
+            cacheIndex[task.filename] === task.renderSignature
+          ) {
+            success(`Skipping cached: ${task.filename}`);
+            skippedCount++;
+            return;
+          }
+
+          if (hasCachedOutput) {
+            log(`Cache changed, re-rendering: ${task.filename}`);
+          } else {
+            log(`No cached output found, rendering: ${task.filename}`);
+          }
+
+          await fs.writeFile(tempInputFile, task.mermaidCode);
+          wroteTempInput = true;
+
+          log(`Rendering: ${task.filename}`);
+          if (renderDiagram) {
+            await renderDiagram({
+              ...task,
+              tempInputFile,
+              themeConfigPath,
+              themeName,
+              outputFormat,
+              outputSuffix,
+              mmdcArgs,
+            });
+          } else {
+            await execAsync(
+              `npx mmdc -i "${tempInputFile}" -o "${task.outputPath}" ${themeConfigFile} ${themeNameConfig} ${mmdcArgs.join(
+                ' '
+              )}`
+            );
+          }
+
+          cacheIndex[task.filename] = task.renderSignature;
+          cacheIndexChanged = true;
           success(`Finished rendering: ${task.filename}`);
           renderedCount++;
         } catch (err) {
+          if (cacheIndex[task.filename]) {
+            delete cacheIndex[task.filename];
+            cacheIndexChanged = true;
+          }
+
           error(`Failed to render ${task.filename}`, err);
           if (err.stdout) console.error(err.stdout);
           if (err.stderr) console.error(err.stderr);
         } finally {
-          try {
-            await fs.unlink(tempInputFile);
-          } catch (unlinkErr) {
-            error(`Failed to delete temp file: ${tempInputFile}`, unlinkErr);
+          if (wroteTempInput) {
+            try {
+              await fs.unlink(tempInputFile);
+            } catch (unlinkErr) {
+              error(`Failed to delete temp file: ${tempInputFile}`, unlinkErr);
+            }
           }
         }
       })
@@ -192,10 +298,20 @@ async function renderAllMermaidDiagrams(options) {
 
   await Promise.all(renderPromises);
 
+  if (cacheIndexChanged) {
+    await writeCacheIndex(cacheFilePath, cacheIndex);
+  }
+
   success(`--- Mermaid Theme Build Finished ('${themeName}') ---`);
   success(`Rendered: ${renderedCount} new`);
   success(`Skipped:  ${skippedCount} cached`);
   log('------------------------------------');
+
+  return {
+    renderedCount,
+    skippedCount,
+    totalCount: uniqueTasks.length,
+  };
 }
 
 module.exports = { renderAllMermaidDiagrams };

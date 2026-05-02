@@ -31,7 +31,7 @@ This plugin fixes all of that by doing the rendering **once** at build time (`np
 - **Accessible:** Generates an HTML `<figure>` wrapper with `<img>` and `<figcaption>` for screen readers, filling out `alt` text, caption and `aria-describedby` using your diagram's metadata.
 - **Metadata Support:** Use a frontmatter-like block inside your diagram to add an `id`, `alt` text, `caption`, and link to a text description via `aria-describedby`.
 - **Fully Configurable:** Integrates directly with your `docusaurus.config.ts`, including `themeConfig.mermaid`.
-- **Caching:** Already-rendered diagrams are skipped, making subsequent builds fast.
+- **Caching:** Already-rendered diagrams are skipped only when the Mermaid source and render settings still match, so diagram edits and Mermaid config changes automatically invalidate stale cache entries.
 - **Customizable Output:** Choose between SVG and PNG formats, set output directories, and pass custom arguments to the Mermaid CLI.
 - **Concurrency Control:** Configure how many diagrams to render in parallel for optimal build performance.
 
@@ -45,7 +45,7 @@ The plugin operates in three stages:
     - If your color mode switch is disabled via `themeConfig.mermaid.disableColorMode`, it only renders the one default theme defined in `themeConfig.colorMode.defaultMode`.
     - It calls `@mermaid-js/mermaid-cli` (`mmdc`) to render two images for each diagram (e.g., `diagram-de-light.svg` and `diagram-de-dark.svg`) if the theme switch is enabled, or just one image if disabled.
     - It saves these images to the `static/img/diagrams` directory (or your configured `outputDir`).
-    - Caches rendered diagrams to speed up future builds.
+    - Caches rendered diagrams to speed up future builds, but automatically re-renders them when the Mermaid source, theme, CLI args, or Mermaid config changes.
     - When Docusaurus starts the build process, it copies these images from `static/` to the final `build/` directory automatically.
 
 2.  **Content Transformation (Remark Plugin):**
@@ -55,7 +55,8 @@ The plugin operates in three stages:
     - `prerender: false` diagrams are skipped and left as-is for the client-side renderer.
     - It fills out accessibility attributes like `alt`, `aria-label`, and `aria-describedby` using the metadata provided in the diagram block.
     - If a caption is provided, it adds a `<figcaption>` element below the images.
-    - In the dev mode (`npm run start`), it shows the original mermaid renderer for live previewing and faster edits, which are modified with the same structure as the static output using `<figure>`, `<img>`, and `<figcaption>` to match the build output as closely as possible.
+    - In dev mode (`npm run start`), it renders and serves the same static image markup by default, and Docusaurus watches the configured Mermaid content paths so editing a diagram re-renders the cached asset in place.
+    - The generated image URLs include a version token derived from the diagram source and render settings, so the browser swaps to the refreshed asset without needing a manual page reload.
 
 3.  **Client Side (Browser):**
     - The plugin injects a tiny CSS file that uses Docusaurus's `[data-theme='dark']` attribute to show the correct `<img>` and hide the other one. This switch is instant and requires zero JavaScript.
@@ -153,6 +154,7 @@ All options are optional and are passed to the main plugin in `docusaurus.config
 | `concurrency`    | The number of diagrams to render concurrently.                                                                               | `os.cpus().length`                   |
 | `mmdcArgs`       | An array of additional string arguments to pass to the `mmdc` CLI.                                                           | `['-b', 'transparent']`              |
 | `outputSuffixes` | The suffixes to append for light and dark themes.                                                                            | `{ light: '-light', dark: '-dark' }` |
+| `renderInDevelopment` | Render and use the static Mermaid images during `docusaurus start`. Set this to `false` to keep the live Mermaid code blocks in development. | `true` |
 
 ## Configuration Examples
 
