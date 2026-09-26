@@ -231,3 +231,102 @@ test('renders draft docs in development and skips them in production', async (t)
   assert.equal(renderCalls.length, 1);
   assert.match(renderCalls[0], /^draft-diagram-/);
 });
+
+test('ignores mermaid examples nested in other code blocks, like remark', async (t) => {
+  const { extractMermaidBlocks } = require('../renderer');
+  const { getDiagramFilename } = require('../diagram-utils');
+  const tempRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'docusaurus-prerender-mermaid-')
+  );
+
+  t.after(async () => {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  const siteDir = tempRoot;
+  const docsDir = path.join(siteDir, 'docs');
+  const outputDir = path.join(siteDir, 'static', 'img', 'diagrams');
+  const tempDir = path.join(siteDir, '.tmp');
+  const renderCalls = [];
+
+  await fs.mkdir(docsDir, { recursive: true });
+  await fs.mkdir(outputDir, { recursive: true });
+  await fs.mkdir(tempDir, { recursive: true });
+
+  const docPath = path.join(docsDir, 'plugin-docs.mdx');
+  const content = [
+    '# Usage',
+    '',
+    '````markdown title="Example"',
+    '```mermaid',
+    '---',
+    'id: example-only',
+    '---',
+    'graph TD',
+    '  A[Example] --> B[Only]',
+    '```',
+    '````',
+    '',
+    '1. A list item:',
+    '',
+    '    ```mermaid',
+    '    ---',
+    '    id: first-real',
+    '    ---',
+    '    graph TD',
+    '      A[First] --> B[Real]',
+    '    ```',
+    '',
+    '~~~mermaid',
+    '---',
+    'id: second-real',
+    '---',
+    'graph TD',
+    '  A[Second] --> B[Real]',
+    '~~~',
+    '',
+  ].join('\n');
+  await fs.writeFile(docPath, content);
+
+  const blocks = extractMermaidBlocks(content);
+  assert.equal(blocks.length, 2);
+  assert.match(blocks[0], /^---\nid: first-real\n---\ngraph TD\n {2}A\[First\]/);
+  assert.match(blocks[1], /id: second-real/);
+
+  await renderAllMermaidDiagrams({
+    siteDir,
+    contentPaths: ['docs'],
+    outputDir,
+    themeConfigPath: null,
+    themeConfigHash: 'default',
+    cacheFilePath: path.join(siteDir, '.docusaurus', 'cache-nested.json'),
+    defaultLocale: 'en',
+    outputFormat: 'svg',
+    concurrency: 1,
+    mmdcArgs: ['-b', 'transparent'],
+    tempDir,
+    themeName: 'neutral',
+    outputSuffix: '-light',
+    renderDiagram: async (task) => {
+      renderCalls.push(task.filename);
+      await fs.writeFile(task.outputPath, task.mermaidCode);
+    },
+  });
+
+  // The remark plugin numbers only real diagrams: first-real is 0,
+  // second-real is 1. The renderer must produce exactly those files.
+  const expected = ['first-real', 'second-real'].map((id, diagramIndex) =>
+    getDiagramFilename({
+      id,
+      mermaidCode: '',
+      hasExplicitId: true,
+      siteDir,
+      filePath: docPath,
+      diagramIndex,
+      locale: 'en',
+      outputSuffix: '-light',
+      outputFormat: 'svg',
+    })
+  );
+  assert.deepEqual([...renderCalls].sort(), [...expected].sort());
+});

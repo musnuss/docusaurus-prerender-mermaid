@@ -16,6 +16,61 @@ const prerenderRegex = /prerender:\s*false/;
 const draftRegex = /draft:\s*true/;
 
 /**
+ * Mermaid code blocks of a Markdown/MDX file, in the order remark sees them.
+ *
+ * Follows the CommonMark fence rules that matter here, so the renderer and
+ * the remark plugin count the same blocks: a fence is three or more
+ * backticks or tildes; it closes with the same character and at least the
+ * same length; everything inside a fence is content, so an example
+ * ```mermaid block inside a ````markdown block is not a diagram. The
+ * content loses up to as many leading spaces as the opening fence had,
+ * like mdast `code` node values.
+ *
+ * @param {string} content File content.
+ * @returns {string[]} The value of each mermaid code block.
+ */
+function extractMermaidBlocks(content) {
+  const blocks = [];
+  const lines = content.split(/\r?\n/);
+  let open = null;
+
+  for (const line of lines) {
+    if (open) {
+      const close = line.match(/^(\s*)(`{3,}|~{3,})\s*$/);
+      if (
+        close &&
+        close[2][0] === open.char &&
+        close[2].length >= open.length
+      ) {
+        if (open.isMermaid) blocks.push(open.lines.join('\n'));
+        open = null;
+        continue;
+      }
+      if (open.isMermaid) {
+        const indent = line.match(/^ */)[0].length;
+        open.lines.push(line.slice(Math.min(indent, open.indent)));
+      }
+      continue;
+    }
+
+    const start = line.match(/^( *)(`{3,}|~{3,})(.*)$/);
+    if (!start) continue;
+    const [, indent, fence, info] = start;
+    // A backtick fence cannot have backticks in its info string.
+    if (fence[0] === '`' && info.includes('`')) continue;
+    open = {
+      char: fence[0],
+      length: fence.length,
+      indent: indent.length,
+      isMermaid: info.trim().split(/\s+/)[0] === 'mermaid',
+      lines: [],
+    };
+  }
+
+  return blocks;
+}
+
+/**
  * Docusaurus shows draft docs in development and leaves them out of
  * production builds. Render their diagrams in development too, so a draft
  * can be reviewed with its diagrams; skip them only for production.
@@ -151,7 +206,7 @@ async function renderAllMermaidDiagrams(options) {
     const localeMatch = relativePath.match(/i18n\/([^\/]+)\//);
     const locale = localeMatch ? localeMatch[1] : defaultLocale;
 
-    const mermaidBlocks = content.match(/```mermaid([\s\S]*?)```/g) || [];
+    const mermaidBlocks = extractMermaidBlocks(content);
     if (mermaidBlocks.length > 0) {
       log(`Found ${mermaidBlocks.length} mermaid blocks in: ${relativePath}`);
     }
@@ -167,10 +222,7 @@ async function renderAllMermaidDiagrams(options) {
 
       const idMatch = metadataContent.match(idRegex);
       const hasExplicitId = Boolean(idMatch && idMatch[1]);
-      const mermaidCode = block
-        .replace(/```mermaid|```/g, '')
-        .replace(metadataBlockRegex, '')
-        .trim();
+      const mermaidCode = block.replace(metadataBlockRegex, '').trim();
 
       let id;
       if (idMatch && idMatch[1]) {
@@ -321,4 +373,4 @@ async function renderAllMermaidDiagrams(options) {
   };
 }
 
-module.exports = { renderAllMermaidDiagrams };
+module.exports = { extractMermaidBlocks, renderAllMermaidDiagrams };
