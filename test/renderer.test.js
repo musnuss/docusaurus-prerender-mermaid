@@ -163,3 +163,71 @@ test('renders separate assets when explicit ids are reused across files', async 
   assert.match(outputFiles[1], /^shared-id-[a-f0-9]{10}-en-light\.svg$/);
   assert.equal(renderCalls.length, 2);
 });
+test('renders draft docs in development and skips them in production', async (t) => {
+  const tempRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'docusaurus-prerender-mermaid-')
+  );
+  const previousEnv = process.env.NODE_ENV;
+
+  t.after(async () => {
+    process.env.NODE_ENV = previousEnv;
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  const siteDir = tempRoot;
+  const docsDir = path.join(siteDir, 'docs');
+  const outputDir = path.join(siteDir, 'static', 'img', 'diagrams');
+  const tempDir = path.join(siteDir, '.tmp');
+  const renderCalls = [];
+
+  await fs.mkdir(docsDir, { recursive: true });
+  await fs.mkdir(outputDir, { recursive: true });
+  await fs.mkdir(tempDir, { recursive: true });
+
+  await fs.writeFile(
+    path.join(docsDir, 'draft.mdx'),
+    [
+      '---',
+      'draft: true',
+      '---',
+      '',
+      '```mermaid',
+      '---',
+      'id: draft-diagram',
+      '---',
+      'graph TD',
+      '  A[Draft] --> B[Diagram]',
+      '```',
+      '',
+    ].join('\n')
+  );
+
+  const options = (name) => ({
+    siteDir,
+    contentPaths: ['docs'],
+    outputDir,
+    themeConfigPath: null,
+    themeConfigHash: 'default',
+    cacheFilePath: path.join(siteDir, '.docusaurus', `cache-${name}.json`),
+    defaultLocale: 'en',
+    outputFormat: 'svg',
+    concurrency: 1,
+    mmdcArgs: ['-b', 'transparent'],
+    tempDir,
+    themeName: 'neutral',
+    outputSuffix: '-light',
+    renderDiagram: async (task) => {
+      renderCalls.push(task.filename);
+      await fs.writeFile(task.outputPath, task.mermaidCode);
+    },
+  });
+
+  process.env.NODE_ENV = 'production';
+  await renderAllMermaidDiagrams(options('production'));
+  assert.equal(renderCalls.length, 0);
+
+  process.env.NODE_ENV = 'development';
+  await renderAllMermaidDiagrams(options('development'));
+  assert.equal(renderCalls.length, 1);
+  assert.match(renderCalls[0], /^draft-diagram-/);
+});
