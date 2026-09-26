@@ -14,6 +14,13 @@ const metadataBlockRegex = /---([\s\S]*?)---/;
 const idRegex = /id:\s*(.*)/;
 const prerenderRegex = /prerender:\s*false/;
 const draftRegex = /draft:\s*true/;
+
+/**
+ * Docusaurus shows draft docs in development and leaves them out of
+ * production builds. Render their diagrams in development too, so a draft
+ * can be reviewed with its diagrams; skip them only for production.
+ */
+const shouldSkipDrafts = () => process.env.NODE_ENV === 'production';
 const cacheVersion = 1;
 
 function createRenderSignature(payload) {
@@ -135,7 +142,7 @@ async function renderAllMermaidDiagrams(options) {
   for (const file of docFiles) {
     const content = await fs.readFile(file, 'utf8');
 
-    if (content.match(draftRegex)) {
+    if (shouldSkipDrafts() && content.match(draftRegex)) {
       log(`Skipping draft file: ${file}`);
       continue;
     }
