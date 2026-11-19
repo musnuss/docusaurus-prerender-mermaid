@@ -245,7 +245,7 @@ You can add a metadata block (similar to frontmatter) to the **top** of any ` ``
 - **`id`**: (String) Sets the HTML `id` for the `<figure>` tag. If not provided, a 10-character hash of the diagram code is used. This ID defines the name of the output image files as well.
 - **`alt`**: (String) **Highly recommended.** Sets the `alt` text for the `<img>` tags. This is crucial for accessibility. Make sure to describe the diagram meaningfully, but not longer than 160 characters.
 - **`caption`**: (String) Adds a `<figcaption>` element below the diagram.
-- **`width`**: (String) Sets the `width` attribute on the `<img>` tags (e.g., `600px`). This helps when rendered images are too large on desktop.
+- **`width`**: (String) Sets the `width` attribute on the `<img>` tags in CSS pixels (e.g., `600` or `600px`, written as `600`). This helps when rendered images are too large on desktop. The HTML `width` attribute only takes a whole number ([HTML Standard](https://html.spec.whatwg.org/multipage/embedded-content-other.html#dimension-attributes)): other values (`auto`, `50%`) are left out; size such images with CSS.
 - **`prerender`**: (`false`) If you set `prerender: false`, this plugin will **skip** this diagram entirely, leaving it for the client-side `@docusaurus/theme-mermaid` to render.
 - **`descriptionId`**: (String) An advanced accessibility feature. Links the images to an external description via `aria-describedby`. This is essential for WCAG compliance for complex diagrams. The value should be the `id` of an existing HTML element on the page that contains the description text.
 
@@ -278,14 +278,14 @@ graph TD
 ```html
 <figure id="company-flow" class="static-mermaid-figure">
   <img
-    width="500px"
+    width="500"
     class="mermaid-light"
     src="/img/diagrams/company-flow-de-light.svg"
     alt="A flowchart showing the company process. It starts with 'Sales', leads to 'Development', then 'Testing', and finally 'Deployment'."
     aria-describedby="company-flow-desc"
   />
   <img
-    width="500px"
+    width="500"
     class="mermaid-dark"
     src="/img/diagrams/company-flow-de-dark.svg"
     alt="A flowchart showing the company process. It starts with 'Sales', leads to 'Development', then 'Testing', and finally 'Deployment'."

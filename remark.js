@@ -10,6 +10,18 @@ const captionRegex = /caption:\s*(.*)/;
 const widthRegex = /width:\s*(.*)/;
 const prerenderRegex = /prerender:\s*false/;
 const descriptionIdRegex = /descriptionId:\s*(.*)/;
+const pixelWidthRegex = /^(\d+)(?:px)?$/;
+
+/**
+ * The HTML `width` attribute takes a whole number of CSS pixels: `300px`
+ * becomes `300`; anything else (`auto`, `50%`) is left out, and the image keeps
+ * its intrinsic width (size it with CSS instead).
+ */
+function htmlWidth(value) {
+  const match = value.trim().match(pixelWidthRegex);
+  return match ? match[1] : null;
+}
+
 module.exports = () => {
   // ### 1. Get New Options from Store ###
   const {
@@ -46,7 +58,7 @@ module.exports = () => {
       name: 'img',
       attributes: [
         { type: 'mdxJsxAttribute', name: 'key', value: key },
-        { type: 'mdxJsxAttribute', name: 'width', value: width || 'auto' },
+        width && { type: 'mdxJsxAttribute', name: 'width', value: width },
         className && {
           type: 'mdxJsxAttribute',
           name: 'className',
@@ -109,10 +121,7 @@ module.exports = () => {
       if (descriptionIdMatch && descriptionIdMatch[1]) {
         descriptionId = descriptionIdMatch[1].trim();
       }
-      let width = null;
-      if (widthMatch && widthMatch[1]) {
-        width = widthMatch[1].trim();
-      }
+      const width = widthMatch ? htmlWidth(widthMatch[1]) : null;
 
       const figcaptionNode = caption
         ? {
