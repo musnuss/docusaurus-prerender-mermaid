@@ -10,7 +10,6 @@ const captionRegex = /caption:\s*(.*)/;
 const widthRegex = /width:\s*(.*)/;
 const prerenderRegex = /prerender:\s*false/;
 const descriptionIdRegex = /descriptionId:\s*(.*)/;
-
 module.exports = () => {
   // ### 1. Get New Options from Store ###
   const {
@@ -33,6 +32,36 @@ module.exports = () => {
     }
 
     return `${baseSrc}?v=${versionKey}`;
+  }
+
+  /**
+   * One rendered diagram image. The image carries the accessible name (`alt`)
+   * and the link to the text description: the light and the dark image are
+   * never shown together (the hidden one is `display: none`), so a screen
+   * reader meets exactly one of them.
+   */
+  function createImageNode({ key, className, src, alt, width, descriptionId }) {
+    return {
+      type: 'mdxJsxFlowElement',
+      name: 'img',
+      attributes: [
+        { type: 'mdxJsxAttribute', name: 'key', value: key },
+        { type: 'mdxJsxAttribute', name: 'width', value: width || 'auto' },
+        className && {
+          type: 'mdxJsxAttribute',
+          name: 'className',
+          value: className,
+        },
+        { type: 'mdxJsxAttribute', name: 'src', value: src },
+        { type: 'mdxJsxAttribute', name: 'alt', value: alt },
+        descriptionId && {
+          type: 'mdxJsxAttribute',
+          name: 'aria-describedby',
+          value: descriptionId,
+        },
+      ].filter(Boolean),
+      children: [],
+    };
   }
 
   return (tree, file) => {
@@ -132,30 +161,14 @@ module.exports = () => {
             filenameLight,
             lightVersionKey
           );
-          const lightImgNode = {
-            type: 'mdxJsxFlowElement',
-            name: 'img',
-            attributes: [
-              {
-                type: 'mdxJsxAttribute',
-                name: 'key',
-                value: `mermaid-light-${lightVersionKey}`,
-              },
-              {
-                type: 'mdxJsxAttribute',
-                name: 'width',
-                value: width || 'auto',
-              },
-              {
-                type: 'mdxJsxAttribute',
-                name: 'className',
-                value: 'mermaid-light',
-              },
-              { type: 'mdxJsxAttribute', name: 'src', value: srcLight },
-              { type: 'mdxJsxAttribute', name: 'alt', value: '' },
-            ],
-            children: [],
-          };
+          const lightImgNode = createImageNode({
+            key: `mermaid-light-${lightVersionKey}`,
+            className: 'mermaid-light',
+            src: srcLight,
+            alt,
+            width,
+            descriptionId,
+          });
 
           const filenameDark = getDiagramFilename({
             id,
@@ -173,30 +186,14 @@ module.exports = () => {
             filenameDark,
             darkVersionKey
           );
-          const darkImgNode = {
-            type: 'mdxJsxFlowElement',
-            name: 'img',
-            attributes: [
-              {
-                type: 'mdxJsxAttribute',
-                name: 'key',
-                value: `mermaid-dark-${darkVersionKey}`,
-              },
-              {
-                type: 'mdxJsxAttribute',
-                name: 'width',
-                value: width || 'auto',
-              },
-              {
-                type: 'mdxJsxAttribute',
-                name: 'className',
-                value: 'mermaid-dark',
-              },
-              { type: 'mdxJsxAttribute', name: 'src', value: srcDark },
-              { type: 'mdxJsxAttribute', name: 'alt', value: '' },
-            ],
-            children: [],
-          };
+          const darkImgNode = createImageNode({
+            key: `mermaid-dark-${darkVersionKey}`,
+            className: 'mermaid-dark',
+            src: srcDark,
+            alt,
+            width,
+            descriptionId,
+          });
           childrenNodes = [lightImgNode, darkImgNode];
         } else {
           // ### Render ONLY the Default Image ###
@@ -217,26 +214,13 @@ module.exports = () => {
             versionKey
           );
 
-          const defaultImgNode = {
-            type: 'mdxJsxFlowElement',
-            name: 'img',
-            attributes: [
-              {
-                type: 'mdxJsxAttribute',
-                name: 'key',
-                value: `mermaid-${versionKey}`,
-              },
-              {
-                type: 'mdxJsxAttribute',
-                name: 'width',
-                value: width || 'auto',
-              },
-              // No 'className' needed
-              { type: 'mdxJsxAttribute', name: 'src', value: src },
-              { type: 'mdxJsxAttribute', name: 'alt', value: '' }, // Decorative
-            ],
-            children: [],
-          };
+          const defaultImgNode = createImageNode({
+            key: `mermaid-${versionKey}`,
+            src: src,
+            alt,
+            width,
+            descriptionId,
+          });
           childrenNodes = [defaultImgNode];
         }
       } else {
@@ -260,18 +244,22 @@ module.exports = () => {
             name: 'className',
             value: 'static-mermaid-figure',
           },
-          { type: 'mdxJsxAttribute', name: 'role', value: 'img' },
-          { type: 'mdxJsxAttribute', name: 'aria-label', value: alt },
-          caption && {
-            type: 'mdxJsxAttribute',
-            name: 'aria-labelledby',
-            value: `${id}-caption`,
-          },
-          descriptionId !== null && {
-            type: 'mdxJsxAttribute',
-            name: 'aria-describedby',
-            value: descriptionId,
-          },
+          // A <figure> with a <figcaption> takes its name from the caption
+          // and allows no other role (ARIA in HTML), so it gets none. The
+          // images carry `alt` and `aria-describedby`; only the unrendered
+          // fallback (a code block, no image) names and describes the figure.
+          !useRenderedDiagrams &&
+            !caption && {
+              type: 'mdxJsxAttribute',
+              name: 'aria-label',
+              value: alt,
+            },
+          !useRenderedDiagrams &&
+            descriptionId !== null && {
+              type: 'mdxJsxAttribute',
+              name: 'aria-describedby',
+              value: descriptionId,
+            },
         ].filter(Boolean),
         children: [...childrenNodes, figcaptionNode].filter(Boolean),
       };

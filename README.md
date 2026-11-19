@@ -53,8 +53,8 @@ The plugin operates in three stages:
     - It replaces the code block with an HTML `<figure>` structure.
     - Inside the figure, it inserts two `<img>` tags pointing to the static files (or one, if the theme switch is disabled).
     - `prerender: false` diagrams are skipped and left as-is for the client-side renderer.
-    - It fills out accessibility attributes like `alt`, `aria-label`, and `aria-describedby` using the metadata provided in the diagram block.
-    - If a caption is provided, it adds a `<figcaption>` element below the images.
+    - It sets `alt` and `aria-describedby` on the `<img>` tags from the metadata provided in the diagram block.
+    - If a caption is provided, it adds a `<figcaption>` element below the images; the `<figure>` takes its accessible name from it. The figure gets no `role`: a `<figure>` with a `<figcaption>` allows no other role ([ARIA in HTML](https://www.w3.org/TR/html-aria/#el-figure)).
     - In dev mode (`npm run start`), it renders and serves the same static image markup by default, and Docusaurus watches the configured Mermaid content paths so editing a diagram re-renders the cached asset in place.
     - The generated image URLs include a version token derived from the diagram source and render settings, so the browser swaps to the refreshed asset without needing a manual page reload.
 
@@ -247,7 +247,7 @@ You can add a metadata block (similar to frontmatter) to the **top** of any ` ``
 - **`caption`**: (String) Adds a `<figcaption>` element below the diagram.
 - **`width`**: (String) Sets the `width` attribute on the `<img>` tags (e.g., `600px`). This helps when rendered images are too large on desktop.
 - **`prerender`**: (`false`) If you set `prerender: false`, this plugin will **skip** this diagram entirely, leaving it for the client-side `@docusaurus/theme-mermaid` to render.
-- **`descriptionId`**: (String) An advanced accessibility feature. Links the figure to an external description via `aria-describedby`. This is essential for WCAG compliance for complex diagrams. The value should be the `id` of an existing HTML element on the page that contains the description text.
+- **`descriptionId`**: (String) An advanced accessibility feature. Links the images to an external description via `aria-describedby`. This is essential for WCAG compliance for complex diagrams. The value should be the `id` of an existing HTML element on the page that contains the description text.
 
 ### Example
 
@@ -282,7 +282,6 @@ graph TD
     class="mermaid-light"
     src="/img/diagrams/company-flow-de-light.svg"
     alt="A flowchart showing the company process. It starts with 'Sales', leads to 'Development', then 'Testing', and finally 'Deployment'."
-    aria-labelledby="company-flow-caption"
     aria-describedby="company-flow-desc"
   />
   <img
@@ -290,7 +289,6 @@ graph TD
     class="mermaid-dark"
     src="/img/diagrams/company-flow-de-dark.svg"
     alt="A flowchart showing the company process. It starts with 'Sales', leads to 'Development', then 'Testing', and finally 'Deployment'."
-    aria-labelledby="company-flow-caption"
     aria-describedby="company-flow-desc"
   />
 
