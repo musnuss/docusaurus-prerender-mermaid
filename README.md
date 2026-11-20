@@ -51,7 +51,8 @@ The plugin operates in three stages:
 2.  **Content Transformation (Remark Plugin):**
     - During the Markdown-to-HTML conversion, the remark plugin intercepts the ` ```mermaid ` block.
     - It replaces the code block with an HTML `<figure>` structure.
-    - Inside the figure, it inserts two `<img>` tags pointing to the static files (or one, if the theme switch is disabled).
+    - Inside the figure, it inserts two `<img>` tags pointing to the static files: one for the light and one for the dark theme. With the theme switch disabled (`themeConfig.colorMode.disableSwitch: true`), it renders and inserts only one `<img>` with one `alt`.
+    - With the theme switch enabled, both images carry the same `alt` and `aria-describedby`: they are two renderings of the same diagram. The CSS hides the inactive one with `display: none`, which removes it from the accessibility tree ([WAI-ARIA 1.2](https://www.w3.org/TR/wai-aria-1.2/#aria-hidden), [AccName 1.2](https://www.w3.org/TR/accname-1.2/#computation-steps)), so a screen reader meets one image and one `alt`. Docusaurus' own [`ThemedImage`](https://docusaurus.io/docs/markdown-features/assets#themed-images) renders both theme images with the same `alt` in the same way.
     - `prerender: false` diagrams are skipped and left as-is for the client-side renderer.
     - It sets `alt` and `aria-describedby` on the `<img>` tags from the metadata provided in the diagram block.
     - If a caption is provided, it adds a `<figcaption>` element below the images; the `<figure>` takes its accessible name from it. The figure gets no `role`: a `<figure>` with a `<figcaption>` allows no other role ([ARIA in HTML](https://www.w3.org/TR/html-aria/#el-figure)).
